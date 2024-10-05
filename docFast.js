@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Copiar informações relevantes para a documentação da ONU.
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.9
 // @description  Captura dados relevantes da ONU para a área de transferência.
 // @author       Maxwell Couto
 // @match        https://autoisp.gegnet.com.br/contracted_services/*
+// @match        https://autoisp.gegnet.com.br/gpon_clients/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=gegnet.com.br
 // @grant        GM_setClipboard
 // ==/UserScript==
@@ -259,6 +260,7 @@
             + ' - ' + (gponData['PON Link'] ? gponData['PON Link'] : 'PON Link Indisponível.') 
             + ' - ' + ' ONU Id: ' + (gponData['ONU ID'] ? gponData['ONU ID'] : 'ONU Id. Indisponível.') + '.' || 'Não disponível.'}\n` +
             `Modelo da ONU: ${modelo || 'Não disponível.'}\n` +
+            `Firmware da ONU: ${additionalData['Firmware da ONU'] || 'Não disponível.'}\n` +
             `Service Port: ${gponData['Service Port'] || 'Não disponível.'}\n`+
             `VLAN (do perfil): ${gponData['VLAN (do perfil)'] || 'Não disponível.'}\n`+
             `Uptime: ${additionalData['Uptime da ONU'] || 'Não disponível.'}\n` +
@@ -266,47 +268,75 @@
             `Atenuação Rx ONU: ${atenuacaoFormatter(additionalData)}\n`+
             `Atenuação Rx OLT: ${additionalData['Atenuação Rx OLT'] || 'Não disponível.'}\n`+
             `Negociação: ${additionalData['Negociação'].Link == 'Down' ? 'Desconectado.' :
-                '\n'+ criarTabela(additionalData['Negociação'].data) || 'Não disponível.'}\n\n` +
+                '\n\n'+ criarTabela(additionalData['Negociação'].data) || 'Não disponível.'}\n\n` +
             `Alarmes: ${getAlarms(additionalData)}.`;
     }
 
     function criarTabela(data) {
 
+        let valuePaddings = ['                  ', '     ', '             ', ''];
+        
         const objetos = Array.isArray(data) ? data : [data];
         const headers = Object.keys(objetos[0]);
     
         const colWidths = headers.map(header => {
-            return Math.max(
-                header.length,
-                ...objetos.map(obj => String(obj[header]).length)
-            ) + 10; 
+            return Math.max(header.length, ...objetos.map(obj => String(obj[header]).length)) + 6;
         });
     
-        const separador = '+' + colWidths.map(width => '-'.repeat(width)).join('+') + '+';
-    
         const formatarLinha = (items, isHeader = false) => {
-            return '| ' + items.map((item, index) => {
+            return items.map((item, index) => {
                 const str = String(item);
-                const totalPadding = isHeader ? (colWidths[index] - str.length - 5) : (colWidths[index] - str.length - 2);
-                const leftPadding = Math.floor(totalPadding / 2);
-                const rightPadding = totalPadding - leftPadding;
-                
-                return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
-            }).join(' | ') + ' |';
+                let padding
+                if (isHeader) {
+                    padding = ' '.repeat(colWidths[index] - str.length);
+                } else {
+                    if (parseInt(str) < 10) {
+                        padding = '                  ';
+                    } else {
+                        switch (str.toLowerCase()) { //ajusta os espaçamentos manualmente devido a fonte do Integrator.
+                            case 'up':
+                                padding = '           ';
+                                break;
+                            case 'down':
+                                padding = '      ';
+                                break;
+                            case '10m':
+                                padding = '                 ';
+                                break;
+                            case '100m':
+                                padding = '               ';
+                                break;
+                            case '1000m':
+                                padding = '             ';
+                                break;
+                            case '10':
+                                padding = '                     ';
+                                break;
+                            case '100':
+                                padding = '                   ';
+                                break;
+                            case '1000':
+                                padding = '                 ';
+                                break;
+                            default:
+                                padding = '';
+                                break;
+                        }
+                    }                    
+                }
+                return isHeader ? str + padding : str.toLowerCase() + padding;
+            }).join(' ');
         };
     
-        let tabela = separador + '\n';
-        tabela += formatarLinha(headers, true) + '\n';
-        tabela += separador + '\n';
+        let resultado = formatarLinha(headers, true) + '\n'; // Cabeçalhos
+        resultado += '-'.repeat(resultado.length) + '\n'; // Separador
     
         objetos.forEach(obj => {
             const values = headers.map(header => obj[header]);
-            tabela += formatarLinha(values) + '\n';
+            resultado += formatarLinha(values) + '\n';
         });
     
-        tabela += separador;
-    
-        return tabela;
+        return resultado;
     }
 
     function getAlarms(additionalData) {
